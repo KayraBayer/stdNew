@@ -1,42 +1,66 @@
-// requireAuth.js
-import React, { useEffect, useState } from "react";
+// requireAuth.tsx
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
+import { getIdTokenResult, type User } from "firebase/auth";
 import { useAuth } from "./authContext";
-import { getIdTokenResult } from "firebase/auth";
 
-const ADMIN_EMAIL = "admin@mail.com";
+const ADMIN_EMAIL = "admin@mail.com" as const;
 
-export default function RequireAuth({ children, role }) {
-  const { user, loading } = useAuth();
-  const [claims, setClaims] = useState(null);
+type Role = "admin" | "user";
+
+type CustomClaims = {
+  admin?: boolean;
+  // Gerekirse başka custom claim'ler eklersin
+  [k: string]: unknown;
+};
+
+type RequireAuthProps = {
+  children: ReactNode;
+  role?: Role;
+};
+
+export default function RequireAuth({ children, role }: RequireAuthProps) {
+  // useAuth hook'unun tipi projede tanımlı değilse aşağıdaki cast işini görür.
+  const { user, loading } = useAuth() as { user: User | null; loading: boolean };
+
+  const [claims, setClaims] = useState<CustomClaims | null>(null);
 
   useEffect(() => {
     let on = true;
+
     (async () => {
-      if (!user) { setClaims(null); return; }
+      if (!user) {
+        if (on) setClaims(null);
+        return;
+      }
       try {
-        // ⚠️ token’ı yenileyerek claim’leri garantile
+        // Token'ı force-refresh ile yenile: custom claim'ler garantilensin
         const res = await getIdTokenResult(user, true);
-        if (on) setClaims(res.claims || {});
+        if (on) setClaims((res && (res.claims as CustomClaims)) || {});
       } catch {
         if (on) setClaims({});
       }
     })();
-    return () => { on = false; };
+
+    return () => {
+      on = false;
+    };
   }, [user]);
 
-  // İlk yükleniş veya claims beklenirken
+  // İlk yükleniş ya da claim'ler beklenirken (buraya spinner konulabilir)
   if (loading || (user && claims === null)) {
-    return null; // istersen buraya spinner koy
+    return null;
   }
 
+  // Oturum yoksa giriş sayfasına
   if (!user) return <Navigate to="/" replace />;
 
   const emailIsAdmin = (user.email || "").toLowerCase() === ADMIN_EMAIL;
-  const isAdmin = claims?.admin === true || emailIsAdmin;
+  const adminClaim = typeof claims?.admin === "boolean" ? claims.admin : false;
+  const isAdmin = adminClaim || emailIsAdmin;
 
   if (role === "admin" && !isAdmin) return <Navigate to="/dashboard" replace />;
-  if (role === "user"  &&  isAdmin) return <Navigate to="/admin"     replace />;
+  if (role === "user" && isAdmin) return <Navigate to="/admin" replace />;
 
-  return children;
+  return <>{children}</>;
 }

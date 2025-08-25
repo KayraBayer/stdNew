@@ -1,42 +1,51 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
+// src/pages/context/authContext.tsx
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { onAuthStateChanged, signOut as firebaseSignOut, type User } from "firebase/auth";
 import { auth } from "../../firebaseConfig";
 
-/* ---------- Varsayılan değerler --------- */
-const AuthContext = createContext({
-  user: null,
-  loading: true,
-  startLoading: () => {},
-  stopLoading: () => {},
-  signOut: () => {},
-});
+/* ---------- Tipler ---------- */
+type AuthContextType = {
+  user: User | null;
+  loading: boolean;
+  startLoading: () => void;
+  stopLoading: () => void;
+  signOut: () => Promise<void>;
+};
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser]       = useState(null);
-  const [loading, setLoading] = useState(true);   // ilk açılışta true
+type AuthProviderProps = {
+  children: ReactNode;
+};
 
-  /* Firebase dinleyicisi */
+/* ---------- Context ---------- */
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/* ---------- Provider ---------- */
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true); // ilk açılışta true
+
+  // Firebase auth state dinleyicisi
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoading(false);                          // her değişimde kapat
+      setLoading(false); // her değişimde yüklemeyi kapat
     });
     return () => unsub();
   }, []);
 
-  /* Dışarıdan loading’i kontrol */
+  // Dışarıdan loading kontrolü
   const startLoading = () => setLoading(true);
-  const stopLoading  = () => setLoading(false);
+  const stopLoading = () => setLoading(false);
 
-  /* Oturumu sonlandır */
+  // Oturumu sonlandır
   const signOut = () => firebaseSignOut(auth);
 
-  const value = { user, loading, startLoading, stopLoading, signOut };
+  const value: AuthContextType = { user, loading, startLoading, stopLoading, signOut };
 
   return (
     <AuthContext.Provider value={value}>
       {loading ? (
-        /* İsterseniz spinner ekleyin */
+        // İstersen buraya component/spinner koy
         <div className="flex h-screen items-center justify-center bg-[#0d0d0d]">
           <p className="text-gray-400">Yükleniyor…</p>
         </div>
@@ -45,6 +54,13 @@ export const AuthProvider = ({ children }) => {
       )}
     </AuthContext.Provider>
   );
-};
+}
 
-export const useAuth = () => useContext(AuthContext);
+/* ---------- Hook ---------- */
+export function useAuth(): AuthContextType {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth, AuthProvider içinde kullanılmalıdır.");
+  }
+  return ctx;
+}
