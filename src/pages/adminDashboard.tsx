@@ -39,6 +39,7 @@ type TestData = {
   link: string;
   questionCount: string;
   answerKey: string;
+  type: string;
 };
 
 type SlideData = {
@@ -46,6 +47,7 @@ type SlideData = {
   grade: string;
   name: string;
   link: string;
+  type: string;
 };
 
 type ExamData = {
@@ -54,6 +56,7 @@ type ExamData = {
   questionCount: string;
   duration: string;
   link: string;
+  type: string;
 };
 
 /* ——— Doğrulamalar ——— */
@@ -242,6 +245,7 @@ export default function AdminDashboard(): React.ReactElement {
     link: "",
     questionCount: "",
     answerKey: "",
+    type: "test",
   });
 
   const handleTestChange = (
@@ -280,6 +284,7 @@ export default function AdminDashboard(): React.ReactElement {
         questionCount: +questionCount,
         answerKey,
         createdAt: serverTimestamp(),
+        type: "test",
       });
       setTestData({
         collection: "",
@@ -288,6 +293,7 @@ export default function AdminDashboard(): React.ReactElement {
         link: "",
         questionCount: "",
         answerKey: "",
+        type: "test",
       });
       await fetchStats();
       alert("Test kaydedildi.");
@@ -302,6 +308,7 @@ export default function AdminDashboard(): React.ReactElement {
     grade: "",
     name: "",
     link: "",
+    type: "slayt",
   });
 
   const handleSlideChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
@@ -320,15 +327,16 @@ export default function AdminDashboard(): React.ReactElement {
         name,
         link,
         createdAt: serverTimestamp(),
+        type: "slayt",
       });
-      setSlideData({ collection: "", grade: "", name: "", link: "" });
+      setSlideData({ collection: "", grade: "", name: "", link: "", type: "slayt" });
       alert("Slayt kaydedildi.");
     } catch (err: unknown) {
       alert((err as { message?: string })?.message ?? "Hata");
     }
   };
 
-  /* ────────────────── (ESKİ) Deneme ekleme → (YENİ) Özel Ders (Test gibi) ────────────────── */
+  /* ──────────────────  Özel Ders (Test gibi) ────────────────── */
   // Test formunun aynısı; fakat kategori kaynakları "ozelKategoriler" koleksiyonundan gelir.
   const [specialAnswerKeyErr, setSpecialAnswerKeyErr] = useState<string>("");
   const [specialTestData, setSpecialTestData] = useState<TestData>({
@@ -338,6 +346,7 @@ export default function AdminDashboard(): React.ReactElement {
     link: "",
     questionCount: "",
     answerKey: "",
+    type: "yayın",
   });
 
   const handleSpecialTestChange = (
@@ -378,6 +387,7 @@ export default function AdminDashboard(): React.ReactElement {
         questionCount: +questionCount,
         answerKey,
         createdAt: serverTimestamp(),
+        type: "yayın",
       });
       setSpecialTestData({
         collection: "",
@@ -386,6 +396,7 @@ export default function AdminDashboard(): React.ReactElement {
         link: "",
         questionCount: "",
         answerKey: "",
+        type: "yayın",
       });
       await fetchStats();
       alert("Özel ders testi kaydedildi.");

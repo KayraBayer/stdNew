@@ -57,6 +57,15 @@ const toCollectionName = (str?: string | null): string =>
     .slice(0, 120)
     .toLowerCase();
 
+/* ——— TR + Sayısal (natural) sıralama ——— */
+const trCollator = new Intl.Collator("tr", { numeric: true, sensitivity: "base" });
+const cmp = (a: string, b: string) => trCollator.compare(a ?? "", b ?? "");
+const sortByName = <T extends { name: string }>(xs: T[]) => xs.sort((a, b) => cmp(a.name, b.name));
+const sortByCat = <T extends { cat: string }>(xs: T[]) => xs.sort((a, b) => cmp(a.cat, b.cat));
+
+/* ——— type normalize ——— */
+const normType = (v?: unknown) => String(v ?? "").trim().toLowerCase();
+
 /* ───────────────────────── Tipler ───────────────────────── */
 type Grade = 5 | 6 | 7 | 8;
 
@@ -124,7 +133,6 @@ const TEST_THEME: Record<
     underline: string;
   }
 > = {
-  /* Normal testler */
   emerald: {
     badgeColor: "emerald",
     chip: "bg-emerald-50 text-emerald-700 ring-emerald-100",
@@ -135,7 +143,6 @@ const TEST_THEME: Record<
     ring: "focus-visible:ring-emerald-400",
     underline: "decoration-emerald-300",
   },
-  /* Özel testler: kırmızılı tema */
   rose: {
     badgeColor: "rose",
     chip: "bg-rose-50 text-rose-700 ring-rose-100",
@@ -155,7 +162,7 @@ const IconBadge: React.FC<{
   children: React.ReactNode;
 }> = ({ color = "indigo", children, className = "" }) => (
   <span
-    className={`inline-flex h-7 w-7 items-center justify-center rounded-full ring-1 ${pastelBg[color]} ${className}`}
+    className={`inline-flex items-center justify-center rounded-full ring-1 h-6 w-6 sm:h-7 sm:w-7 ${pastelBg[color]} ${className}`}
   >
     {children}
   </span>
@@ -166,11 +173,11 @@ const SectionHeader: React.FC<{
   color?: PastelColor;
   children: React.ReactNode;
 }> = ({ icon: Icon, color = "indigo", children }) => (
-  <div className="mb-5 flex items-center gap-2">
+  <div className="mb-4 sm:mb-5 flex items-center gap-2">
     <IconBadge color={color}>
       <Icon className="h-4 w-4" />
     </IconBadge>
-    <h2 className={`text-lg font-semibold ${pastelText[color]}`}>{children}</h2>
+    <h2 className={`text-base sm:text-lg font-semibold ${pastelText[color]}`}>{children}</h2>
   </div>
 );
 
@@ -178,7 +185,7 @@ const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({
   className = "",
   children,
 }) => (
-  <div className={`rounded-xl border border-slate-300 bg-white shadow-sm ${className}`}>
+  <div className={`rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden ${className}`}>
     {children}
   </div>
 );
@@ -210,11 +217,11 @@ const Collapsible: React.FC<{ title: React.ReactNode; children: React.ReactNode 
   }, [children, open]);
 
   return (
-    <div className="mb-5 rounded-xl border border-slate-300 bg-white shadow-sm">
+    <div className="mb-4 sm:mb-5 rounded-xl border border-slate-300 bg-white shadow-sm">
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-xl border-b border-slate-200 px-5 py-3.5 text-left text-[15px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        className="flex w-full items-center justify-between rounded-xl border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[15px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
       >
         {title}
         <motion.div
@@ -233,7 +240,7 @@ const Collapsible: React.FC<{ title: React.ReactNode; children: React.ReactNode 
         className="overflow-hidden"
         style={{ willChange: "max-height, opacity" }}
       >
-        <div ref={contentRef} className="px-6 pb-5 pt-4">
+        <div ref={contentRef} className="px-4 pb-4 pt-3 sm:px-6 sm:pb-5 sm:pt-4">
           {children}
         </div>
       </motion.div>
@@ -244,7 +251,7 @@ const Collapsible: React.FC<{ title: React.ReactNode; children: React.ReactNode 
 /* Slayt listesi */
 const SlideList: React.FC<{ cats?: CatList<SlideItem>[] }> = ({ cats = [] }) =>
   cats.length ? (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {cats.map(({ cat, list }) => (
         <div key={cat} className="space-y-2">
           <div className="flex items-center gap-2">
@@ -255,8 +262,8 @@ const SlideList: React.FC<{ cats?: CatList<SlideItem>[] }> = ({ cats = [] }) =>
           </div>
           <ul className="space-y-1.5 text-sm leading-6 text-slate-700">
             {list.map((s, i) => (
-              <li key={`${cat}-${i}`} className="flex items-center gap-2">
-                <IconBadge color="indigo" className="h-6 w-6">
+              <li key={`${cat}-${i}`} className="flex items-center gap-2 min-w-0">
+                <IconBadge color="indigo" className="h-6 w-6 shrink-0">
                   <FileText className="h-3.5 w-3.5" />
                 </IconBadge>
                 {s.link ? (
@@ -264,13 +271,14 @@ const SlideList: React.FC<{ cats?: CatList<SlideItem>[] }> = ({ cats = [] }) =>
                     href={s.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-700"
+                    className="inline-flex items-center gap-1 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-700 min-w-0 max-w-[70vw] sm:max-w-none"
+                    title={s.name}
                   >
-                    {s.name}
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span className="truncate">{s.name}</span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                   </a>
                 ) : (
-                  s.name
+                  <span className="truncate" title={s.name}>{s.name}</span>
                 )}
               </li>
             ))}
@@ -293,7 +301,7 @@ const TestList: React.FC<{
   const th = TEST_THEME[accent];
 
   return cats.length ? (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {cats.map(({ cat, list }) => (
         <div key={`${accent}-${cat}`} className="space-y-2">
           <div className="flex items-center gap-2">
@@ -303,7 +311,7 @@ const TestList: React.FC<{
             <p className={`text-sm font-medium ${th.text}`}>{cat}</p>
           </div>
 
-          <ul className="space-y-2.5 text-sm leading-6 text-slate-700">
+          <ul className="space-y-2 text-sm leading-6 text-slate-700">
             {list.map((t, i) => {
               const qCount = t.questionCount ?? 20;
               const hasLink = Boolean(t.link);
@@ -318,7 +326,7 @@ const TestList: React.FC<{
                     <IconBadge color={th.badgeColor} className="h-6 w-6 shrink-0">
                       <ClipboardList className="h-3.5 w-3.5" />
                     </IconBadge>
-                    <span className="truncate">{t.name}</span>
+                    <span className="truncate" title={t.name}>{t.name}</span>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${th.chip}`}
                     >
@@ -354,11 +362,10 @@ const TestList: React.FC<{
                       disabled={isSolved}
                       onClick={() => {
                         if (isSolved) return;
-                        navigate(
-                          `/optik?count=${qCount}&test=${encodeURIComponent(
-                            t.name
-                          )}&student=${encodeURIComponent(studentName)}`
-                        );
+                        const url = `/optik?count=${qCount}&test=${encodeURIComponent(
+                          t.name
+                        )}&student=${encodeURIComponent(studentName)}`;
+                        navigate(url);
                       }}
                       title={isSolved ? "Bu test daha önce çözüldü." : "Testi çöz"}
                       className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium shadow-sm transition-colors focus:outline-none focus-visible:ring-2
@@ -442,89 +449,106 @@ export default function UserDashboard(): React.ReactElement {
           .map((d) => clean((d.data() as DocumentData).name))
           .filter(Boolean) as string[];
 
+        slideCats.sort(cmp);
+        testCats.sort(cmp);
+        specialCats.sort(cmp);
+
         const slidesObj: SlidesByGrade = {};
         const testsObj: TestsByGrade = {};
         const specialObj: TestsByGrade = {};
 
         await Promise.all(
           GRADES.map(async (g) => {
-            /* Slaytlar */
+            /* Slaytlar → sadece type: "slayt" */
             const slideArr: CatList<SlideItem>[] = [];
             await Promise.all(
               slideCats.map(async (cat) => {
                 const snap = await getDocs(query(collection(db, cat), where("grade", "==", g)));
-                const list: SlideItem[] = snap.docs
-                  .map((s) => {
-                    const d = s.data() as DocumentData;
-                    return { name: clean(d.name), link: clean(d.link) || undefined };
-                  })
-                  .filter((x) => x.name);
+                const list: SlideItem[] = snap.docs.flatMap<SlideItem>((s) => {
+                  const d = s.data() as DocumentData & { type?: string; name?: string; link?: string };
+                  if (normType(d.type) !== "slayt") return [];
+                  const name = clean(d.name);
+                  if (!name) return [];
+                  return [{ name, link: clean(d.link) || undefined }];
+                });
+                sortByName(list);
                 if (list.length) slideArr.push({ cat, list });
               })
             );
+            sortByCat(slideArr);
             slidesObj[g] = slideArr;
 
-            /* Normal testler */
+            /* Normal testler → sadece type: "test" */
             const testArr: CatList<TestItem>[] = [];
             await Promise.all(
               testCats.map(async (cat) => {
                 const snap = await getDocs(query(collection(db, cat), where("grade", "==", g)));
-                const list: TestItem[] = snap.docs
-                  .map((t) => {
-                    const d = t.data() as DocumentData & {
-                      createdAt?: { toDate?: () => Date };
-                      duration?: number;
-                      questionCount?: number;
-                      count?: number;
-                    };
-                    const start = d.createdAt?.toDate?.();
-                    const closing = start
-                      ? new Date(start.getTime() + (d.duration || 0) * 60_000)
-                      : null;
-                    return {
-                      name: clean(d.name),
-                      link: clean(d.link) || undefined,
-                      closing,
-                      questionCount:
-                        typeof d.questionCount === "number"
-                          ? d.questionCount
-                          : typeof d.count === "number"
-                          ? d.count
-                          : 20,
-                    };
-                  })
-                  .filter((x) => x.name);
+                const list: TestItem[] = snap.docs.flatMap<TestItem>((t) => {
+                  const d = t.data() as DocumentData & {
+                    type?: string;
+                    name?: string;
+                    link?: string;
+                    createdAt?: { toDate?: () => Date };
+                    duration?: number;
+                    questionCount?: number;
+                    count?: number;
+                  };
+                  if (normType(d.type) !== "test") return [];
+                  const start = d.createdAt?.toDate?.();
+                  const closing = start ? new Date(start.getTime() + (d.duration || 0) * 60_000) : null;
+                  const name = clean(d.name);
+                  if (!name) return [];
+                  return [{
+                    name,
+                    link: clean(d.link) || undefined,
+                    closing,
+                    questionCount:
+                      typeof d.questionCount === "number"
+                        ? d.questionCount
+                        : typeof d.count === "number"
+                        ? d.count
+                        : 20,
+                  }];
+                });
+                sortByName(list);
                 if (list.length) testArr.push({ cat, list });
               })
             );
+            sortByCat(testArr);
             testsObj[g] = testArr;
 
-            /* Özel testler (ozelKategoriler) */
+            /* Yayınlar (özel) → sadece type: "yayın" */
             const specialArr: CatList<TestItem>[] = [];
             await Promise.all(
               specialCats.map(async (cat) => {
                 const snap = await getDocs(query(collection(db, cat), where("grade", "==", g)));
-                const list: TestItem[] = snap.docs
-                  .map((t) => {
-                    const d = t.data() as DocumentData & {
-                      questionCount?: number;
-                      count?: number;
-                    };
-                    return {
-                      name: clean(d.name),
-                      link: clean(d.link) || undefined,
-                      questionCount:
-                        typeof d.questionCount === "number"
-                          ? d.questionCount
-                          : typeof d.count === "number"
-                          ? d.count
-                          : 20,
-                    };
-                  })
-                  .filter((x) => x.name);
+                const list: TestItem[] = snap.docs.flatMap<TestItem>((t) => {
+                  const d = t.data() as DocumentData & {
+                    type?: string;
+                    name?: string;
+                    link?: string;
+                    questionCount?: number;
+                    count?: number;
+                  };
+                  if (normType(d.type) !== "yayın") return [];
+                  const name = clean(d.name);
+                  if (!name) return [];
+                  return [{
+                    name,
+                    link: clean(d.link) || undefined,
+                    questionCount:
+                      typeof d.questionCount === "number"
+                        ? d.questionCount
+                        : typeof d.count === "number"
+                        ? d.count
+                        : 20,
+                  }];
+                });
+                sortByName(list);
                 if (list.length) specialArr.push({ cat, list });
               })
             );
+            sortByCat(specialArr);
             specialObj[g] = specialArr;
           })
         );
@@ -619,8 +643,7 @@ export default function UserDashboard(): React.ReactElement {
           });
         });
 
-        // Adına göre sırala
-        arr.sort((a, b) => a.name.localeCompare(b.name, "tr"));
+        arr.sort((a, b) => cmp(a.name, b.name));
         setAssigned(arr);
       } catch (e) {
         console.error("Atanan ödevler getirilemedi:", e);
@@ -680,21 +703,18 @@ export default function UserDashboard(): React.ReactElement {
   const navigate = useNavigate();
 
   return (
-    <section className="min-h-screen bg-slate-50 px-5 py-10 text-slate-800 md:px-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-10 flex items-center justify-center gap-2">
-          <IconBadge color="indigo">
-            <BookOpen className="h-4 w-4" />
-          </IconBadge>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+    <section className="min-h-screen bg-slate-50 px-3 py-6 sm:px-5 sm:py-8 md:px-6 md:py-10">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-8 sm:mb-10 flex items-center justify-center gap-2">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
             Öğrenci Paneli
           </h1>
         </div>
 
         {/* 3 kolonlu ızgara: Slayt/Test kartı 2 kolon kaplar, sağda dikey yığın */}
-        <div className="grid gap-8 lg:grid-cols-3">
+        <div className="grid gap-6 md:gap-8 lg:grid-cols-3">
           {/* SOL (2 kolon): Slayt & Testler */}
-          <Card className="p-7 md:p-8 lg:col-span-2">
+          <Card className="p-4 sm:p-6 md:p-8 lg:col-span-2">
             <SectionHeader icon={BookOpen} color="indigo">
               Slaytlar &amp; Testler
             </SectionHeader>
@@ -709,12 +729,12 @@ export default function UserDashboard(): React.ReactElement {
                 <h3 className={`mb-2 mt-5 text-sm font-semibold ${pastelText.emerald}`}>Testler</h3>
                 <TestList
                   cats={tests[g] || []}
-                  studentName={nameKey} // optik'e nameKey gönderiyoruz
+                  studentName={nameKey}
                   solvedSet={solvedSet}
                   accent="emerald"
                 />
 
-                {/* Özel Testler (kırmızılı tema: rose) */}
+                {/* Yayınlar (özel) */}
                 <h3 className={`mb-2 mt-5 text-sm font-semibold ${pastelText.rose}`}>Yayınlar</h3>
                 <TestList
                   cats={specialTests[g] || []}
@@ -727,9 +747,9 @@ export default function UserDashboard(): React.ReactElement {
           </Card>
 
           {/* SAĞ: Üstte Aktif Ödevler, altında Kişisel Bilgiler ve İstatistikler */}
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-6 md:gap-8">
             {/* Aktif Ödevler */}
-            <Card className="p-7 md:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <SectionHeader icon={ClipboardList} color="rose">
                 Aktif Ödevler
               </SectionHeader>
@@ -752,7 +772,7 @@ export default function UserDashboard(): React.ReactElement {
                           <IconBadge color={th.badgeColor} className="h-6 w-6 shrink-0">
                             <ClipboardList className="h-3.5 w-3.5" />
                           </IconBadge>
-                          <span className="truncate">{a.name}</span>
+                          <span className="truncate" title={a.name}>{a.name}</span>
                           <span
                             className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${th.chip}`}
                             title={a.isSpecial ? "Özel test" : "Normal test"}
@@ -789,13 +809,13 @@ export default function UserDashboard(): React.ReactElement {
                             disabled={isSolved}
                             onClick={() => {
                               if (isSolved) return;
-                              navigate(
-                                `/optik?count=${a.questionCount}&test=${encodeURIComponent(
-                                  a.name
-                                )}&student=${encodeURIComponent(nameKey)}&cat=${encodeURIComponent(
-                                  a.category
-                                )}&grade=${a.grade ?? ""}&link=${encodeURIComponent(a.link || "")}`
-                              );
+                              const url = `/optik?count=${a.questionCount}&test=${encodeURIComponent(
+                                a.name
+                              )}&student=${encodeURIComponent(nameKey)}&cat=${encodeURIComponent(
+                                a.category
+                              )}&grade=${a.grade ?? ""}&link=${encodeURIComponent(a.link || "")}`;
+                              // SPA içinde kalalım:
+                              navigate(url);
                             }}
                             title={isSolved ? "Bu test daha önce çözüldü." : "Testi çöz"}
                             className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium shadow-sm transition-colors focus:outline-none focus-visible:ring-2
@@ -816,7 +836,7 @@ export default function UserDashboard(): React.ReactElement {
             </Card>
 
             {/* Kişisel Bilgiler */}
-            <Card className="p-7 md:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <SectionHeader icon={User2} color="violet">
                 Kişisel Bilgiler
               </SectionHeader>
@@ -837,44 +857,44 @@ export default function UserDashboard(): React.ReactElement {
             </Card>
 
             {/* İstatistikler */}
-            <Card className="p-7 md:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <SectionHeader icon={BarChart3} color="amber">
                 İstatistikler
               </SectionHeader>
 
-              <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
-                <div className="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-100">
-                  <div className="text-2xl font-extrabold text-amber-700">{stats.submissions}</div>
-                  <div className="mt-1 text-xs font-medium text-amber-700/80">Test</div>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 text-center sm:grid-cols-4">
+                <div className="rounded-lg bg-amber-50 p-2.5 sm:p-3 ring-1 ring-amber-100">
+                  <div className="text-xl sm:text-2xl font-extrabold text-amber-700">{stats.submissions}</div>
+                  <div className="mt-1 text-[11px] sm:text-xs font-medium text-amber-700/80">Test</div>
                 </div>
-                <div className="rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-100">
-                  <div className="text-2xl font-extrabold text-emerald-700">{stats.correct}</div>
-                  <div className="mt-1 text-xs font-medium text-emerald-700/80">Doğru</div>
+                <div className="rounded-lg bg-emerald-50 p-2.5 sm:p-3 ring-1 ring-emerald-100">
+                  <div className="text-xl sm:text-2xl font-extrabold text-emerald-700">{stats.correct}</div>
+                  <div className="mt-1 text-[11px] sm:text-xs font-medium text-emerald-700/80">Doğru</div>
                 </div>
-                <div className="rounded-lg bg-rose-50 p-3 ring-1 ring-rose-100">
-                  <div className="text-2xl font-extrabold text-rose-700">{stats.wrong}</div>
-                  <div className="mt-1 text-xs font-medium text-rose-700/80">Yanlış</div>
+                <div className="rounded-lg bg-rose-50 p-2.5 sm:p-3 ring-1 ring-rose-100">
+                  <div className="text-xl sm:text-2xl font-extrabold text-rose-700">{stats.wrong}</div>
+                  <div className="mt-1 text-[11px] sm:text-xs font-medium text-rose-700/80">Yanlış</div>
                 </div>
-                <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
-                  <div className="text-2xl font-extrabold text-slate-700">{stats.blank}</div>
-                  <div className="mt-1 text-xs font-medium text-slate-700/80">Boş</div>
+                <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3 ring-1 ring-slate-200">
+                  <div className="text-xl sm:text-2xl font-extrabold text-slate-700">{stats.blank}</div>
+                  <div className="mt-1 text-[11px] sm:text-xs font-medium text-slate-700/80">Boş</div>
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
-                  <p className="text-center text-[13px] text-slate-600">
+              <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="rounded-lg bg-white p-2.5 sm:p-3 ring-1 ring-slate-200">
+                  <p className="text-center text-[12px] sm:text-[13px] text-slate-600">
                     Karşılaştırılan soru
                   </p>
-                  <p className="mt-1 text-center text-xl font-bold text-slate-900">
+                  <p className="mt-1 text-center text-lg sm:text-xl font-bold text-slate-900">
                     {stats.compared}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
-                  <p className="text-center text-[13px] text-slate-600">
+                <div className="rounded-lg bg-white p-2.5 sm:p-3 ring-1 ring-slate-200">
+                  <p className="text-center text-[12px] sm:text-[13px] text-slate-600">
                     Doğruluk
                   </p>
-                  <p className="mt-1 text-center text-xl font-bold text-slate-900">
+                  <p className="mt-1 text-center text-lg sm:text-xl font-bold text-slate-900">
                     {(stats.accuracy * 100).toFixed(1)}%
                   </p>
                 </div>

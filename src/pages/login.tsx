@@ -7,7 +7,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
 } from "firebase/auth";
-import { collection, getDocs, query, where, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import {
   Mail,
   Lock,
@@ -220,6 +220,11 @@ const TestList: React.FC<{ items?: TestCategoryBlock[] }> = ({ items = [] }) =>
     <p className="text-xs text-slate-400">Bu sınıf için test yok.</p>
   );
 
+/* ——— TR + numeric collator (doğal sıralama) ——— */
+const trNat = new Intl.Collator("tr", { sensitivity: "base", numeric: true });
+const sortTR = (a = "", b = "") => trNat.compare(a, b);
+const normType = (v?: string | null) => String(v ?? "").trim().toLowerCase();
+
 export default function Login(): React.ReactElement {
   const navigate = useNavigate();
   const { startLoading, stopLoading } = useAuth() as { startLoading: () => void; stopLoading: () => void };
@@ -243,60 +248,71 @@ export default function Login(): React.ReactElement {
       try {
         // Slayt kategorileri
         const slideCatSnap = await getDocs(collection(db, "slaytKategoriAdlari"));
-        const slideCatNames = slideCatSnap.docs.map((d) => (d.data() as { name?: string }).name).filter(Boolean) as string[];
+        const slideCatNames = slideCatSnap.docs
+          .map((d) => (d.data() as { name?: string }).name)
+          .filter(Boolean) as string[];
 
         const fetchSlides = async (cat: string): Promise<SlideItem[]> => {
           const snap = await getDocs(query(collection(db, cat), where("grade", "==", selectedGrade)));
-          return snap.docs.map((s) => {
-            const data = s.data() as { name?: string; link?: string };
-            return { name: data.name ?? "Adsız", link: data.link ?? "" };
+          // 🔧 Nullsız, direkt SlideItem[] üret
+          return snap.docs.flatMap<SlideItem>((s) => {
+            const data = s.data() as { name?: string; link?: string; type?: string };
+            if (normType(data.type) !== "slayt") return [];
+            return [{ name: data.name ?? "Adsız", link: data.link || undefined }];
           });
         };
 
-        const slideLists = await Promise.all(
+        const slideListsUnsorted = await Promise.all(
           slideCatNames.map(async (cat) => ({
             category: cat,
-            slides: (await fetchSlides(cat)).sort((a, b) => a.name.localeCompare(b.name, "tr", { sensitivity: "base" })),
+            slides: await fetchSlides(cat),
           }))
         );
 
-        setSlides(
-          slideLists
-            .filter((c) => c.slides.length)
-            .sort((a, b) => a.category.localeCompare(b.category, "tr", { sensitivity: "base" }))
-        );
+        const slideLists = slideListsUnsorted
+          .map((c) => ({ ...c, slides: [...c.slides].sort((a, b) => sortTR(a.name, b.name)) }))
+          .filter((c) => c.slides.length)
+          .sort((a, b) => sortTR(a.category, b.category));
+
+        setSlides(slideLists);
 
         // Test kategorileri
         const testCatSnap = await getDocs(collection(db, "kategoriAdlari"));
-        const testCatNames = testCatSnap.docs.map((d) => (d.data() as { name?: string }).name).filter(Boolean) as string[];
+        const testCatNames = testCatSnap.docs
+          .map((d) => (d.data() as { name?: string }).name)
+          .filter(Boolean) as string[];
 
         const fetchTests = async (cat: string): Promise<TestItem[]> => {
           const snap = await getDocs(query(collection(db, cat), where("grade", "==", selectedGrade)));
-          return snap.docs.map((t) => {
+          // 🔧 Nullsız, direkt TestItem[] üret
+          return snap.docs.flatMap<TestItem>((t) => {
             const data = t.data() as {
               name?: string;
               link?: string;
               createdAt?: { toDate?: () => Date };
               duration?: number;
+              type?: string;
             };
+            if (normType(data.type) !== "test") return [];
             const start = data.createdAt?.toDate?.() ?? null;
-            const end = start ? new Date(start.getTime() + ((data.duration ?? 0) * 60_000)) : null;
-            return { name: data.name ?? "Adsız", link: data.link ?? "", closing: end };
+            const end = start ? new Date(start.getTime() + (data.duration ?? 0) * 60_000) : null;
+            return [{ name: data.name ?? "Adsız", link: data.link || undefined, closing: end }];
           });
         };
 
-        const testList = await Promise.all(
+        const testListsUnsorted = await Promise.all(
           testCatNames.map(async (cat) => ({
             category: cat,
-            tests: (await fetchTests(cat)).sort((a, b) => a.name.localeCompare(b.name, "tr", { sensitivity: "base" })),
+            tests: await fetchTests(cat),
           }))
         );
 
-        setCategories(
-          testList
-            .filter((c) => c.tests.length)
-            .sort((a, b) => a.category.localeCompare(b.category, "tr", { sensitivity: "base" }))
-        );
+        const testList = testListsUnsorted
+          .map((c) => ({ ...c, tests: [...c.tests].sort((a, b) => sortTR(a.name, b.name)) }))
+          .filter((c) => c.tests.length)
+          .sort((a, b) => sortTR(a.category, b.category));
+
+        setCategories(testList);
       } catch (err) {
         console.error("Firestore veri çekme hatası:", err);
       } finally {
@@ -453,7 +469,10 @@ export default function Login(): React.ReactElement {
 
       {/* Alt navbar marjı */}
       <div className="mx-auto mt-4 max-w-6xl">
-        <BottomNav active={selectedGrade as 5 | 6 | 7 | 8} onSelect={setSelectedGrade as (g: 5 | 6 | 7 | 8) => void} />
+        <BottomNav
+          active={selectedGrade as 5 | 6 | 7 | 8}
+          onSelect={setSelectedGrade as (g: 5 | 6 | 7 | 8) => void}
+        />
       </div>
     </section>
   );
