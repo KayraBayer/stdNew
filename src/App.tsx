@@ -8,6 +8,7 @@ import RequireAuth from "./pages/context/requireAuth";
 import OptikForm from "./pages/components/optikForm";
 import AdminStudentReports from "./pages/adminStudentReports";
 import AdminAssignTests from "./pages/adminAssignTests";
+import SolvedTests from "./pages/SolvedTests";
 
 export default function App(): React.ReactElement {
   return (
@@ -35,6 +36,7 @@ export default function App(): React.ReactElement {
                   </RequireAuth>
                 }
               />
+              <Route path="/cozdugum-testler" element={<SolvedTests />} />
               <Route path="/optik" element={<OptikForm />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -9,6 +9,8 @@ import {
   where,
   limit,
   type DocumentData,
+  doc,
+  updateDoc, // ✅ update için
 } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import { useAuth } from "../context/authContext";
@@ -106,8 +108,6 @@ function scoreAnswers(params: { answersArray: Array<Option | "-">; answerKey: st
     }
   }
 
-  // answersArray, anahtardan uzun ise kalanları skor dışı bırakıyoruz.
-
   return {
     correctCount: correct,
     wrongCount: wrong,
@@ -120,7 +120,7 @@ function scoreAnswers(params: { answersArray: Array<Option | "-">; answerKey: st
   };
 }
 
-/* ——— Belirli bir kategoride (koleksiyonda) test adını bularak belgeyi çek ——— */
+/* ——— Belirli kategoride bul ——— */
 async function findInCategory(category: string, testName: string) {
   const snap = await getDocs(
     query(collection(db, category), where("name", "==", testName), limit(1))
@@ -131,19 +131,13 @@ async function findInCategory(category: string, testName: string) {
   return { category, data, id: docSnap.id };
 }
 
-/* ——— Test adından kategoriyi bul ———
-   Öncelik:
-   1) state/URL ile gelen testCat varsa önce orada ara
-   2) Yoksa "kategoriAdlari" ve "ozelKategoriler" listelerindeki *kategori ad* koleksiyonlarında adı eşleşen belgeyi bul
-*/
+/* ——— Test adından kategoriyi bul ——— */
 async function findTestByNameWithCategory(testName: string, hintedCategory?: string | null) {
-  // 1) İpucu kategori varsa onu dene
   if (hintedCategory) {
     const hit = await findInCategory(hintedCategory, testName);
     if (hit) return { ...hit, type: "hint" as const };
   }
 
-  // 2) Kategori havuzlarını çek
   const [normCatsSnap, specialCatsSnap] = await Promise.all([
     getDocs(collection(db, "kategoriAdlari")),
     getDocs(collection(db, "ozelKategoriler")),
@@ -156,18 +150,70 @@ async function findTestByNameWithCategory(testName: string, hintedCategory?: str
     .map((d) => String((d.data() as DocumentData)?.name || "").trim())
     .filter(Boolean);
 
-  // Önce normal kategorilerde ara
   for (const cat of normCats) {
     const hit = await findInCategory(cat, testName);
     if (hit) return { ...hit, type: "normal" as const };
   }
-  // Sonra özel kategorilerde ara
   for (const cat of specialCats) {
     const hit = await findInCategory(cat, testName);
     if (hit) return { ...hit, type: "special" as const };
   }
 
   return null;
+}
+
+/* ——— Ödev TAMAMLAMA: <nameKey>_odevler içinde test.category + test.name eşleşiyorsa ve status=='assigned' ise update ——— */
+async function completeAssignmentsByCatAndName(params: {
+  nameKey: string;
+  category: string;
+  testName: string;
+}) {
+  const { nameKey, category, testName } = params;
+  const collName = `${nameKey}_odevler`;
+
+  try {
+    // Tam üç koşullu sorgu (index isteyebilir)
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, collName),
+          where("status", "==", "assigned"),
+          where("test.category", "==", category),
+          where("test.name", "==", testName)
+        )
+      );
+      await Promise.all(
+        snap.docs.map((d) =>
+          updateDoc(doc(db, collName, d.id), {
+            status: "completed",     // ✅ string durum güncelle
+            completedAt: serverTimestamp(),
+          })
+        )
+      );
+      return;
+    } catch {
+      // Fallback: yalnızca status ile çek, client'ta hem category hem name filtresi uygula
+      const tmp = await getDocs(
+        query(collection(db, collName), where("status", "==", "assigned"))
+      );
+      const filtered = tmp.docs.filter((d) => {
+        const data = d.data() as DocumentData;
+        const t = (data.test || {}) as Record<string, unknown>;
+        return String(t.category || "").trim() === category && String(t.name || "").trim() === testName;
+      });
+      await Promise.all(
+        filtered.map((d) =>
+          updateDoc(doc(db, collName, d.id), {
+            assigned: false,
+            status: "completed",
+            completedAt: serverTimestamp(),
+          })
+        )
+      );
+    }
+  } catch (e) {
+    console.warn("Ödevi tamamlarken hata:", e);
+  }
 }
 
 export default function OptikForm(): React.ReactElement {
@@ -199,6 +245,13 @@ export default function OptikForm(): React.ReactElement {
   const [submitted, setSubmitted] = useState(false); // ✅ Kaydetme tamamlandıktan sonra butonları kilitle
   const [msg, setMsg] = useState<Msg | null>(null);
   const answered = useMemo(() => Object.keys(answers).length, [answers]);
+
+  // Renklendirme için sonuç (doğru şıkları göstermiyoruz)
+  const [result, setResult] = useState<null | {
+    wrongQuestions: number[];
+    correctQuestions: number[];
+    blankQuestions: number[];
+  }>(null);
 
   // Öğrenci adı state/URL ile gelmediyse, DB’den çek (fallback)
   useEffect(() => {
@@ -236,6 +289,7 @@ export default function OptikForm(): React.ReactElement {
     if (submitted) return; // ✅ gönderim sonrası temizlemeye izin verme
     setAnswers({});
     setMsg(null);
+    setResult(null);
   };
 
   const handleSubmit = async () => {
@@ -257,12 +311,17 @@ export default function OptikForm(): React.ReactElement {
     try {
       // 1) Testi (ve kategorisini) bul -> cevap anahtarını al
       const found = await findTestByNameWithCategory(testName, hintedCat);
+
+      const nameKeyNormalized =
+        (state?.nameKey && typeof state.nameKey === "string" && state.nameKey
+          ? state.nameKey
+          : toCollectionName(studentName)
+        )
+          .toLocaleLowerCase("tr-TR");
+
       if (!found) {
         // Yine de submission kaydet ama skor olmadan
-        const collectionName =
-          state?.nameKey && typeof state.nameKey === "string" && state.nameKey
-            ? state.nameKey.toLocaleLowerCase("tr-TR")
-            : toCollectionName(studentName).toLocaleLowerCase("tr-TR");
+        const collectionName = nameKeyNormalized;
 
         const payloadNoKey = {
           type: "submission" as const,
@@ -280,13 +339,22 @@ export default function OptikForm(): React.ReactElement {
           answersArray,
           answersMap: answers,
           createdAt: serverTimestamp(),
-          scoring: {
-            status: "missing-key",
-          },
+          scoring: { status: "missing-key" },
         };
 
         await addDoc(collection(db, collectionName), payloadNoKey);
+
+        // ✅ Ödevi TAMAMLA (kategori varsa)
+        if (hintedCat) {
+          await completeAssignmentsByCatAndName({
+            nameKey: nameKeyNormalized,
+            category: hintedCat,
+            testName,
+          });
+        }
+
         setSubmitted(true); // ✅ kayıttan sonra hem "Kaydet" hem "Temizle" inaktif
+        setResult(null);
         setMsg({
           type: "err",
           text:
@@ -299,10 +367,7 @@ export default function OptikForm(): React.ReactElement {
       const key = String(data?.answerKey || "").trim().toUpperCase();
       if (!key) {
         // Anahtar yoksa yine skorlayamayız
-        const collectionName =
-          state?.nameKey && typeof state.nameKey === "string" && state.nameKey
-            ? state.nameKey.toLocaleLowerCase("tr-TR")
-            : toCollectionName(studentName).toLocaleLowerCase("tr-TR");
+        const collectionName = nameKeyNormalized;
 
         const payloadNoKey = {
           type: "submission" as const,
@@ -320,13 +385,20 @@ export default function OptikForm(): React.ReactElement {
           answersArray,
           answersMap: answers,
           createdAt: serverTimestamp(),
-          scoring: {
-            status: "missing-key",
-          },
+          scoring: { status: "missing-key" },
         };
 
         await addDoc(collection(db, collectionName), payloadNoKey);
+
+        // ✅ Ödevi TAMAMLA
+        await completeAssignmentsByCatAndName({
+          nameKey: nameKeyNormalized,
+          category,
+          testName,
+        });
+
         setSubmitted(true); // ✅ butonları kilitle
+        setResult(null);
         setMsg({
           type: "err",
           text:
@@ -348,10 +420,7 @@ export default function OptikForm(): React.ReactElement {
       } = scoreAnswers({ answersArray, answerKey: key });
 
       // 3) Submission yaz
-      const collectionName =
-        state?.nameKey && typeof state.nameKey === "string" && state.nameKey
-          ? state.nameKey.toLocaleLowerCase("tr-TR")
-          : toCollectionName(studentName).toLocaleLowerCase("tr-TR");
+      const collectionName = nameKeyNormalized;
 
       const payload = {
         type: "submission" as const,
@@ -384,7 +453,16 @@ export default function OptikForm(): React.ReactElement {
       };
 
       await addDoc(collection(db, collectionName), payload);
+
+      // ✅ Ödevi TAMAMLA
+      await completeAssignmentsByCatAndName({
+        nameKey: nameKeyNormalized,
+        category,
+        testName,
+      });
+
       setSubmitted(true); // ✅ başarılı kayıttan sonra da kilitle
+      setResult({ wrongQuestions, correctQuestions, blankQuestions });
       setMsg({
         type: "ok",
         text: `Cevaplar kaydedildi. Doğru: ${correctCount}, Yanlış: ${wrongCount}, Boş: ${blankCount}.`,
@@ -456,44 +534,53 @@ export default function OptikForm(): React.ReactElement {
                 </tr>
               </thead>
               <tbody className="text-slate-700">
-                {rows.map((n) => (
-                  <tr
-                    key={n}
-                    className="odd:bg-slate-50 even:bg-white transition-colors hover:bg-indigo-50/40"
-                  >
-                    <td className="border-b border-slate-200 px-3 py-2.5 text-left font-medium">
-                      {n}
-                    </td>
-                    {OPTIONS.map((opt) => {
-                      const id = `q${n}-${opt}`;
-                      const checked = answers[n] === opt;
-                      return (
-                        <td key={opt} className="border-b border-slate-200 px-3 py-2.5">
-                          <input
-                            id={id}
-                            type="radio"
-                            name={`q${n}`}
-                            value={opt}
-                            className="sr-only peer"
-                            checked={!!checked}
-                            onChange={() => handlePick(n, opt)}
-                            disabled={submitted} // ✅ gönderim sonrası işaretleme kapalı
-                          />
-                          <label
-                            htmlFor={id}
-                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full ring-1 ring-slate-300 transition
-                                       hover:ring-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
-                                       peer-checked:bg-indigo-600 peer-checked:ring-indigo-300
-                                       ${submitted ? "opacity-60 pointer-events-none" : ""}`}
-                            title={opt}
-                          >
-                            <span className="block h-2.5 w-2.5 rounded-full bg-white opacity-0 transition-opacity peer-checked:opacity-100" />
-                          </label>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                {rows.map((n) => {
+                  const isWrong = submitted && result?.wrongQuestions.includes(n);
+                  const isCorrect = submitted && result?.correctQuestions.includes(n);
+                  const baseZebra = n % 2 ? "bg-slate-50" : "bg-white";
+                  const rowBg = isWrong ? "bg-rose-50" : isCorrect ? "bg-emerald-50" : baseZebra;
+                  const rowOutline = isWrong
+                    ? "outline outline-1 outline-rose-200"
+                    : isCorrect
+                    ? "outline outline-1 outline-emerald-200"
+                    : "";
+
+                  return (
+                    <tr key={n} className={`transition-colors hover:bg-indigo-50/40 ${rowBg} ${rowOutline}`}>
+                      <td className="border-b border-slate-200 px-3 py-2.5 text-left font-medium">
+                        {n}
+                      </td>
+                      {OPTIONS.map((opt) => {
+                        const id = `q${n}-${opt}`;
+                        const checked = answers[n] === opt;
+                        return (
+                          <td key={opt} className="border-b border-slate-200 px-3 py-2.5">
+                            <input
+                              id={id}
+                              type="radio"
+                              name={`q${n}`}
+                              value={opt}
+                              className="sr-only peer"
+                              checked={!!checked}
+                              onChange={() => setAnswers((p) => ({ ...p, [n]: opt }))}
+                              disabled={submitted} // gönderim sonrası kapalı
+                            />
+                            <label
+                              htmlFor={id}
+                              className={`inline-flex h-5 w-5 items-center justify-center rounded-full ring-1 ring-slate-300 transition
+                                         hover:ring-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
+                                         peer-checked:bg-indigo-600 peer-checked:ring-indigo-300
+                                         ${submitted ? "opacity-60 pointer-events-none" : ""}`}
+                              title={opt}
+                            >
+                              <span className="block h-2.5 w-2.5 rounded-full bg-white opacity-0 transition-opacity peer-checked:opacity-100" />
+                            </label>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -510,7 +597,7 @@ export default function OptikForm(): React.ReactElement {
               <button
                 type="button"
                 onClick={handleClear}
-                disabled={saving || submitted} // ✅ Temizle de inaktif
+                disabled={saving || submitted}
                 className={`rounded-lg px-4 py-2 text-sm font-medium ring-1 transition-colors focus:outline-none
                   ${
                     saving || submitted
@@ -522,7 +609,7 @@ export default function OptikForm(): React.ReactElement {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={saving || submitted} // ✅ kayıtta ya da kaydedildiyse inaktif
+                disabled={saving || submitted}
                 className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors
                             focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
                             ${

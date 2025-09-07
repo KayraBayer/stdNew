@@ -20,6 +20,7 @@ import {
   SquareLibrary,
   Presentation,
   Layers,
+  ChevronDown, // ⬅️ dropdown oku
 } from "lucide-react";
 import { auth, db } from "../firebaseConfig";
 import { useAuth } from "./context/authContext";
@@ -59,7 +60,9 @@ const IconBadge: React.FC<{ color?: PastelColor; className?: string; children: R
   children,
   className = "",
 }) => (
-  <span className={`inline-flex m-1 h-7 w-7 items-center justify-center rounded-full ring-1 ${pastelBadge[color]} ${className}`}>
+  <span
+    className={`inline-flex m-1 h-7 w-7 items-center justify-center rounded-full ring-1 ${pastelBadge[color]} ${className}`}
+  >
     {children}
   </span>
 );
@@ -139,18 +142,74 @@ const Collapsible: React.FC<{
   );
 };
 
-/* ——— Liste bileşenleri (dark-pastel) ——— */
+/* ——— Kategori içi Dropdown (okla aç/kapa) ——— */
+const CategoryDropdown: React.FC<{
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color?: Exclude<PastelColor, "slate">;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}> = ({ title, icon: Icon, color = "indigo", children, defaultOpen = false }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  const [maxH, setMaxH] = useState(0);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => setMaxH(el.scrollHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    const t = setTimeout(measure, 50);
+    return () => {
+      ro.disconnect();
+      clearTimeout(t);
+    };
+  }, [children, open]);
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-neutral-900/60">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-200 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+      >
+        <span className="inline-flex items-center gap-2">
+          <IconBadge color={color}>
+            <Icon className="h-4 w-4" />
+          </IconBadge>
+          <span className={pastelText[color]}>{title}</span>
+        </span>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.22 }}
+          className="text-slate-400"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </motion.span>
+      </button>
+
+      <motion.div
+        initial={false}
+        animate={open ? { maxHeight: maxH, opacity: 1 } : { maxHeight: 0, opacity: 0 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="overflow-hidden"
+      >
+        <div ref={contentRef} className="px-3 pb-3 pt-1">
+          {children}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+/* ——— Liste bileşenleri (kategori başlıkları okla açılır) ——— */
 const SlideList: React.FC<{ items?: SlideCategoryBlock[] }> = ({ items = [] }) =>
   items.length ? (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {items.map((cat) => (
-        <div key={cat.category} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <IconBadge color="indigo">
-              <BookOpen className="h-4 w-4" />
-            </IconBadge>
-            <p className="text-sm font-medium text-indigo-300">{cat.category}</p>
-          </div>
+        <CategoryDropdown key={cat.category} title={cat.category} icon={BookOpen} color="indigo" defaultOpen={false}>
           <ul className="space-y-1.5 text-sm leading-6 text-slate-300">
             {cat.slides.map((s, idx) => (
               <li key={idx} className="flex items-center gap-2">
@@ -173,7 +232,7 @@ const SlideList: React.FC<{ items?: SlideCategoryBlock[] }> = ({ items = [] }) =
               </li>
             ))}
           </ul>
-        </div>
+        </CategoryDropdown>
       ))}
     </div>
   ) : (
@@ -182,15 +241,9 @@ const SlideList: React.FC<{ items?: SlideCategoryBlock[] }> = ({ items = [] }) =
 
 const TestList: React.FC<{ items?: TestCategoryBlock[] }> = ({ items = [] }) =>
   items.length ? (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {items.map((cat) => (
-        <div key={cat.category} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <IconBadge color="emerald">
-              <SquareLibrary className="h-4 w-4" />
-            </IconBadge>
-            <p className="text-sm font-medium text-emerald-300">{cat.category}</p>
-          </div>
+        <CategoryDropdown key={cat.category} title={cat.category} icon={SquareLibrary} color="emerald" defaultOpen={false}>
           <ul className="space-y-1.5 text-sm leading-6 text-slate-300">
             {cat.tests.map((t, idx) => (
               <li key={idx} className="flex items-center gap-2">
@@ -213,7 +266,7 @@ const TestList: React.FC<{ items?: TestCategoryBlock[] }> = ({ items = [] }) =>
               </li>
             ))}
           </ul>
-        </div>
+        </CategoryDropdown>
       ))}
     </div>
   ) : (
@@ -254,7 +307,6 @@ export default function Login(): React.ReactElement {
 
         const fetchSlides = async (cat: string): Promise<SlideItem[]> => {
           const snap = await getDocs(query(collection(db, cat), where("grade", "==", selectedGrade)));
-          // 🔧 Nullsız, direkt SlideItem[] üret
           return snap.docs.flatMap<SlideItem>((s) => {
             const data = s.data() as { name?: string; link?: string; type?: string };
             if (normType(data.type) !== "slayt") return [];
@@ -284,7 +336,6 @@ export default function Login(): React.ReactElement {
 
         const fetchTests = async (cat: string): Promise<TestItem[]> => {
           const snap = await getDocs(query(collection(db, cat), where("grade", "==", selectedGrade)));
-          // 🔧 Nullsız, direkt TestItem[] üret
           return snap.docs.flatMap<TestItem>((t) => {
             const data = t.data() as {
               name?: string;
@@ -469,10 +520,7 @@ export default function Login(): React.ReactElement {
 
       {/* Alt navbar marjı */}
       <div className="mx-auto mt-4 max-w-6xl">
-        <BottomNav
-          active={selectedGrade as 5 | 6 | 7 | 8}
-          onSelect={setSelectedGrade as (g: 5 | 6 | 7 | 8) => void}
-        />
+        <BottomNav active={selectedGrade as 5 | 6 | 7 | 8} onSelect={setSelectedGrade as (g: 5 | 6 | 7 | 8) => void} />
       </div>
     </section>
   );

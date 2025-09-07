@@ -248,18 +248,74 @@ const Collapsible: React.FC<{ title: React.ReactNode; children: React.ReactNode 
   );
 };
 
-/* Slayt listesi */
+/* ——— Kategori içi Dropdown (okla aç/kapa) ——— */
+const CategoryDropdown: React.FC<{
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color?: PastelColor;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}> = ({ title, icon: Icon, color = "indigo", children, defaultOpen = false }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  const [maxH, setMaxH] = useState(0);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => setMaxH(el.scrollHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    const t = setTimeout(measure, 50);
+    return () => {
+      ro.disconnect();
+      clearTimeout(t);
+    };
+  }, [children, open]);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+      >
+        <span className="inline-flex items-center gap-2">
+          <IconBadge color={color} className="h-6 w-6">
+            <Icon className="h-3.5 w-3.5" />
+          </IconBadge>
+          <span className={pastelText[color]}>{title}</span>
+        </span>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.22 }}
+          className="text-slate-500"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </motion.span>
+      </button>
+
+      <motion.div
+        initial={false}
+        animate={open ? { maxHeight: maxH, opacity: 1 } : { maxHeight: 0, opacity: 0 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="overflow-hidden"
+      >
+        <div ref={contentRef} className="px-3 pb-3 pt-1 sm:px-4">
+          {children}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+/* Slayt listesi — kategori başlıkları dropdown oldu */
 const SlideList: React.FC<{ cats?: CatList<SlideItem>[] }> = ({ cats = [] }) =>
   cats.length ? (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-2 sm:space-y-3">
       {cats.map(({ cat, list }) => (
-        <div key={cat} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <IconBadge color="indigo">
-              <BookOpen className="h-4 w-4" />
-            </IconBadge>
-            <p className="text-sm font-medium text-indigo-700">{cat}</p>
-          </div>
+        <CategoryDropdown key={cat} title={cat} icon={BookOpen} color="indigo" defaultOpen={false}>
           <ul className="space-y-1.5 text-sm leading-6 text-slate-700">
             {list.map((s, i) => (
               <li key={`${cat}-${i}`} className="flex items-center gap-2 min-w-0">
@@ -283,14 +339,14 @@ const SlideList: React.FC<{ cats?: CatList<SlideItem>[] }> = ({ cats = [] }) =>
               </li>
             ))}
           </ul>
-        </div>
+        </CategoryDropdown>
       ))}
     </div>
   ) : (
     <p className="text-xs text-slate-500">Bu sınıf için slayt yok.</p>
   );
 
-/* Test listesi (renk varyant destekli) */
+/* Test listesi — kategori başlıkları dropdown oldu (renk varyant destekli) */
 const TestList: React.FC<{
   cats?: CatList<TestItem>[];
   studentName: string;
@@ -301,16 +357,15 @@ const TestList: React.FC<{
   const th = TEST_THEME[accent];
 
   return cats.length ? (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-2 sm:space-y-3">
       {cats.map(({ cat, list }) => (
-        <div key={`${accent}-${cat}`} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <IconBadge color={th.badgeColor}>
-              <SquareLibrary className="h-4 w-4" />
-            </IconBadge>
-            <p className={`text-sm font-medium ${th.text}`}>{cat}</p>
-          </div>
-
+        <CategoryDropdown
+          key={`${accent}-${cat}`}
+          title={cat}
+          icon={SquareLibrary}
+          color={th.badgeColor}
+          defaultOpen={false}
+        >
           <ul className="space-y-2 text-sm leading-6 text-slate-700">
             {list.map((t, i) => {
               const qCount = t.questionCount ?? 20;
@@ -382,7 +437,7 @@ const TestList: React.FC<{
               );
             })}
           </ul>
-        </div>
+        </CategoryDropdown>
       ))}
     </div>
   ) : (
@@ -688,7 +743,7 @@ export default function UserDashboard(): React.ReactElement {
           }
         });
 
-        const denom = correct + wrong; // boşları dahil etmeden doğruluk
+        const denom = compared; // boşları dahil etmeden doğruluk
         const accuracy = denom > 0 ? correct / denom : 0;
 
         setStats({ submissions, compared, correct, wrong, blank, accuracy });
@@ -884,7 +939,7 @@ export default function UserDashboard(): React.ReactElement {
               <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-3 sm:gap-4">
                 <div className="rounded-lg bg-white p-2.5 sm:p-3 ring-1 ring-slate-200">
                   <p className="text-center text-[12px] sm:text-[13px] text-slate-600">
-                    Karşılaştırılan soru
+                    Soru Sayısı
                   </p>
                   <p className="mt-1 text-center text-lg sm:text-xl font-bold text-slate-900">
                     {stats.compared}
@@ -899,7 +954,13 @@ export default function UserDashboard(): React.ReactElement {
                   </p>
                 </div>
               </div>
-
+              <button
+                type="button"
+                onClick={() => navigate("/cozdugum-testler")}
+                className="mt-2 w-full rounded-md bg-white py-2.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50"
+              >
+                Çözdüğüm Testler
+              </button>
               {stats.submissions === 0 && (
                 <p className="mt-4 text-center text-xs text-slate-500">
                   Henüz gönderim yok. Test çözdükçe istatistikler burada görünecek.
