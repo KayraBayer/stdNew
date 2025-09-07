@@ -8,7 +8,7 @@ import RequireAuth from "./pages/context/requireAuth";
 import OptikForm from "./pages/components/optikForm";
 import AdminStudentReports from "./pages/adminStudentReports";
 import AdminAssignTests from "./pages/adminAssignTests";
-import SolvedTests from "./pages/SolvedTests";
+import SolvedTests from "./pages/solvedTests";
 
 export default function App(): React.ReactElement {
   return (
