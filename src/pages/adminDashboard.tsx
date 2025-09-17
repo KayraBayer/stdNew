@@ -9,6 +9,8 @@ import {
   serverTimestamp,
   doc,
   writeBatch,
+  query,
+  where, 
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -38,6 +40,7 @@ type TestData = {
   name: string;
   link: string;
   questionCount: string;
+  testmakerLink: string
   answerKey: string;
   type: string;
 };
@@ -46,15 +49,6 @@ type SlideData = {
   collection: string;
   grade: string;
   name: string;
-  link: string;
-  type: string;
-};
-
-type ExamData = {
-  grade: string;
-  name: string;
-  questionCount: string;
-  duration: string;
   link: string;
   type: string;
 };
@@ -71,13 +65,50 @@ export default function AdminDashboard(): React.ReactElement {
   const [stats, setStats] = useState<Stats>({ students: 0, tests: 0 });
 
   const fetchStats = async (): Promise<void> => {
+    // öğrencileri tek koleksiyondan sayabiliyoruz
     const studentsSnap = await getCountFromServer(collection(db, "students"));
-    const testsSnap = await getCountFromServer(collection(db, "tests"));
-    setStats({
-      students: studentsSnap.data().count,
-      tests: testsSnap.data().count,
-    });
+    const students = studentsSnap.data().count;
+
+    // kategori adlarını çek (normal ve özel)
+    const [testCatSnap, specialCatSnap] = await Promise.all([
+      getDocs(collection(db, "kategoriAdlari")),
+      getDocs(collection(db, "ozelKategoriler")),
+    ]);
+
+    const testCategoryNames = testCatSnap.docs
+      .map((d) => (d.data() as { name?: string }).name)
+      .filter(Boolean) as string[];
+
+    const specialCategoryNames = specialCatSnap.docs
+      .map((d) => (d.data() as { name?: string }).name)
+      .filter(Boolean) as string[];
+
+    // yardımcı: verilen kategori koleksiyonlarında type filtreli count topla
+    const sumCounts = async (names: string[], typeValue: string): Promise<number> => {
+      const counts = await Promise.all(
+        names.map(async (collName) => {
+          try {
+            const q = query(collection(db, collName), where("type", "==", typeValue));
+            const snap = await getCountFromServer(q);
+            return snap.data().count ?? 0;
+          } catch (e) {
+            console.error("Count error for", collName, e);
+            return 0;
+          }
+        })
+      );
+      return counts.reduce((a, b) => a + b, 0);
+    };
+
+    // normal testler: type === "test", özel yayınlar: type === "yayın"
+    const [normalTests, specialTests] = await Promise.all([
+      sumCounts(testCategoryNames, "test"),
+      sumCounts(specialCategoryNames, "yayın"),
+    ]);
+
+    setStats({ students, tests: normalTests + specialTests });
   };
+
 
   /* ────────────────── Kategoriler ────────────────── */
   const [testCategories, setTestCategories] = useState<CategoryDoc[]>([]);
@@ -243,6 +274,7 @@ export default function AdminDashboard(): React.ReactElement {
     grade: "",
     name: "",
     link: "",
+    testmakerLink: "",
     questionCount: "",
     answerKey: "",
     type: "test",
@@ -267,8 +299,8 @@ export default function AdminDashboard(): React.ReactElement {
 
   const handleAddTest = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
-    const { collection: coll, grade, name, link, questionCount, answerKey } = testData;
-    if (!coll || !grade || !name || !link || !questionCount || !answerKey) return;
+    const { collection: coll, grade, name, link, testmakerLink, questionCount, answerKey } = testData;
+    if (!coll || !grade || !name || !link || !testmakerLink || !questionCount || !answerKey) return;
 
     // — doğrulama —
     if (!ANSWER_KEY_REGEX.test(answerKey) || answerKey.length !== Number(questionCount)) {
@@ -283,6 +315,7 @@ export default function AdminDashboard(): React.ReactElement {
         link,
         questionCount: +questionCount,
         answerKey,
+        testmakerLink,
         createdAt: serverTimestamp(),
         type: "test",
       });
@@ -292,6 +325,7 @@ export default function AdminDashboard(): React.ReactElement {
         name: "",
         link: "",
         questionCount: "",
+        testmakerLink: "",
         answerKey: "",
         type: "test",
       });
@@ -347,6 +381,7 @@ export default function AdminDashboard(): React.ReactElement {
     questionCount: "",
     answerKey: "",
     type: "yayın",
+    testmakerLink: "",
   });
 
   const handleSpecialTestChange = (
@@ -397,6 +432,7 @@ export default function AdminDashboard(): React.ReactElement {
         questionCount: "",
         answerKey: "",
         type: "yayın",
+        testmakerLink: "",
       });
       await fetchStats();
       alert("Özel ders testi kaydedildi.");
@@ -642,6 +678,19 @@ export default function AdminDashboard(): React.ReactElement {
                   <input
                     name="link"
                     value={testData.link}
+                    onChange={handleTestChange}
+                    placeholder="https://..."
+                    className="w-full rounded-md bg-neutral-800 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    required
+                  />
+                </div>
+
+                {/* TestmakerLink */}
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-gray-400">TestMaker Linki</label>
+                  <input
+                    name="testmakerLink"
+                    value={testData.testmakerLink}
                     onChange={handleTestChange}
                     placeholder="https://..."
                     className="w-full rounded-md bg-neutral-800 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"

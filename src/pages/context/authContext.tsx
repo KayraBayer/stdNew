@@ -1,4 +1,3 @@
-// src/pages/context/authContext.tsx
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut, type User } from "firebase/auth";
 import { auth } from "../../firebaseConfig";
@@ -6,7 +5,7 @@ import { auth } from "../../firebaseConfig";
 /* ---------- Tipler ---------- */
 type AuthContextType = {
   user: User | null;
-  loading: boolean;
+  loading: boolean;              // sayfa/işlem yüklenmesi (UI kapatmaz)
   startLoading: () => void;
   stopLoading: () => void;
   signOut: () => Promise<void>;
@@ -22,18 +21,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 /* ---------- Provider ---------- */
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true); // ilk açılışta true
+
+  // Uygulamanın ilk açılışında auth durumunu beklediğimiz "hydration" bayrağı
+  const [hydrating, setHydrating] = useState<boolean>(true);
+
+  // Genel amaçlı loading (işlemler için); artık UI'ı kilitlemeyecek
+  const [loading, setLoading] = useState<boolean>(false);
 
   // Firebase auth state dinleyicisi
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoading(false); // her değişimde yüklemeyi kapat
+      setHydrating(false); // sadece ilk durum çözüldüğünde kapat
     });
     return () => unsub();
   }, []);
 
-  // Dışarıdan loading kontrolü
+  // Dışarıdan loading kontrolü (UI'ı kapatmaz; sayfacıklar bunu gösterebilir)
   const startLoading = () => setLoading(true);
   const stopLoading = () => setLoading(false);
 
@@ -44,14 +48,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? (
-        // İstersen buraya component/spinner koy
+      {/* Yalnızca ilk "hydration" sırasında tam ekran iskelet */}
+      {hydrating ? (
         <div className="flex h-screen items-center justify-center bg-[#0d0d0d]">
           <p className="text-gray-400">Yükleniyor…</p>
         </div>
       ) : (
         children
       )}
+
+      {/* İstersen burada global (non-blocking) bir gösterge koyabilirsin:
+          loading && <div className="fixed bottom-4 right-4 rounded bg-black/70 px-3 py-1.5 text-xs text-white">İşlem sürüyor…</div>
+         Ama UI'ı kapatmayalım ki sayfa içi hatalar/mesajlar görünsün. */}
     </AuthContext.Provider>
   );
 }
